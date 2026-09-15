@@ -9,6 +9,11 @@ en vereist expliciete bevestigingen voor conceptacties. Ze bevat geen codepad
 voor e-Kickoff **Bewaren** of **Versturen**: de afgevaardigde doet de laatste
 controle en eventuele bewaring zelf.
 
+Een optionele, standaard uitgeschakelde supportmelding kan na een fout een
+vooraf ingevuld GitHub-formulier openen. De gebruiker leest en verstuurt dat
+zelf; de app gebruikt geen GitHub-token of API en verstuurt uitsluitend vaste,
+persoonsvrije foutcategorieën.
+
 ## Downloads
 
 Een succesvolle GitHub Actions-run publiceert een Windows x64-artefact met de
