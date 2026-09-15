@@ -28,6 +28,7 @@ import wedstrijdblad_dryrun as dryrun
 import wedstrijdblad_execution_guard as execution_guard
 import wedstrijdblad_populated_sync as populated
 import wedstrijdblad_staff_sync as staff_sync
+import support_report
 
 try:
     import tkinter as tk
@@ -96,6 +97,9 @@ class DryRunWizard(ttk.Frame):
         self.goalkeeper = tk.StringVar()
         self.confirmation = tk.StringVar()
         self.apply_confirmation = tk.StringVar()
+        # Per-run and off by default: opting in never sends an issue; it only
+        # opens a prefilled form after a failure for the user to review.
+        self.support_opt_in = tk.BooleanVar(value=False)
         self.final_manifest: dict[str, Any] | None = None
         self.target_snapshot: dict[str, Any] | None = None
         self.review_plan: dict[str, Any] | None = None
@@ -182,6 +186,11 @@ class DryRunWizard(ttk.Frame):
             self, text="3. Zet spelers als concept over", command=self.apply_draft, state="disabled"
         )
         self.apply_button.grid(row=18, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        ttk.Checkbutton(
+            self,
+            text="Bij een fout een privacyvrije GitHub-supportmelding openen (zelf nakijken en versturen)",
+            variable=self.support_opt_in,
+        ).grid(row=19, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
     def _fixture(self) -> tuple[psd_reader.Fixture, int, int]:
         fixture = psd_reader.Fixture(self.matchsheet_id.get().strip(), self.date.get().strip(), self.opponent.get().strip())
@@ -221,14 +230,15 @@ class DryRunWizard(ttk.Frame):
                 )
             )
         except Exception as exc:
-            self.after(0, lambda detail=str(exc): self._read_failed(detail))
+            self.after(0, lambda problem=exc: self._read_failed(problem))
             return
         self.after(0, lambda: self._read_psd_finished(manifest, rows, raw_staff))
 
-    def _read_failed(self, detail: str) -> None:
+    def _read_failed(self, problem: BaseException) -> None:
         self.read_button.configure(state="normal")
         self.status.set("PSD-selectie is niet gelezen.")
-        messagebox.showerror("Kan PSD niet lezen", detail)
+        messagebox.showerror("Kan PSD niet lezen", str(problem))
+        self._offer_support_report("psd-read", problem)
 
     def _read_psd_finished(
         self, manifest: dict[str, Any], rows: list[psd_reader.RawPlayerRow], raw_staff: list[psd_reader.RawStaffRow],
@@ -360,14 +370,15 @@ class DryRunWizard(ttk.Frame):
                     )
                 )
         except Exception as exc:
-            self.after(0, lambda detail=str(exc): self._target_failed(detail))
+            self.after(0, lambda problem=exc: self._target_failed(problem))
             return
         self.after(0, lambda: self._target_finished(manifest, target, result, discovered, discovered_staff))
 
-    def _target_failed(self, detail: str) -> None:
+    def _target_failed(self, problem: BaseException) -> None:
         self.compare_button.configure(state="normal")
         self.status.set("Geen voorstel gemaakt; er is niets gewijzigd.")
-        messagebox.showerror("Kan doelblad niet controleren", detail)
+        messagebox.showerror("Kan doelblad niet controleren", str(problem))
+        self._offer_support_report("target-read", problem)
 
     def _target_finished(
         self, manifest: dict[str, Any], target: dict[str, Any], result: dict[str, Any] | None, discovered: tuple[Any, ...],
@@ -390,6 +401,7 @@ class DryRunWizard(ttk.Frame):
                 self.compare_button.configure(state="normal")
                 self.status.set("Koppelen stopte; er is niets gewijzigd.")
                 messagebox.showerror("Geen voorstel", str(exc))
+                self._offer_support_report("target-read", exc)
                 return
         else:
             self.populated_sync = None
@@ -413,6 +425,7 @@ class DryRunWizard(ttk.Frame):
                 self.compare_button.configure(state="normal")
                 self.status.set("Staf koppelen stopte; er is niets gewijzigd.")
                 messagebox.showerror("Geen voorstel", str(exc))
+                self._offer_support_report("target-read", exc)
                 return
 
         self.final_manifest = manifest
@@ -493,14 +506,30 @@ class DryRunWizard(ttk.Frame):
                     )
                 )
         except Exception as exc:
-            self.after(0, lambda detail=str(exc): self._apply_failed(detail))
+            self.after(0, lambda problem=exc: self._apply_failed(problem))
             return
         self.after(0, lambda: self._apply_finished(actions))
 
-    def _apply_failed(self, detail: str) -> None:
+    def _apply_failed(self, problem: BaseException) -> None:
         self.apply_button.configure(state="normal")
         self.status.set("Concept is niet toegepast; e-Kickoff of het voorstel wijzigde mogelijk intussen.")
-        messagebox.showerror("Concept niet toegepast", detail)
+        messagebox.showerror("Concept niet toegepast", str(problem))
+        self._offer_support_report("draft-apply", problem)
+
+    def _offer_support_report(self, stage: str, problem: BaseException) -> None:
+        """Optionally open a user-reviewed report without retaining diagnostics."""
+        if not self.support_opt_in.get():
+            return
+        try:
+            report = support_report.make_support_report(stage, problem)
+            opened = support_report.open_reviewed_issue(report)
+        except (OSError, ValueError):
+            opened = False
+        if not opened:
+            messagebox.showwarning(
+                "Supportformulier niet geopend",
+                "Er is geen rapport verstuurd. Controleer je internetverbinding en probeer opnieuw.",
+            )
 
     def _apply_finished(self, actions: tuple) -> None:
         kinds = ", ".join(action if isinstance(action, str) else action.kind for action in actions)
@@ -512,6 +541,20 @@ class DryRunWizard(ttk.Frame):
 
 
 class DryRunWizardTests(unittest.TestCase):
+    def test_support_url_never_contains_exception_text_or_personal_data(self) -> None:
+        secret_detail = "Example Player 01/01/2010 https://private.example/?cookie=secret"
+        report = support_report.make_support_report("target-read", RuntimeError(secret_detail))
+        url = support_report.issue_url(report)
+        self.assertEqual(report.category, "unexpected")
+        self.assertNotIn("Example", url)
+        self.assertNotIn("2010", url)
+        self.assertNotIn("private.example", url)
+        self.assertNotIn("secret", url)
+
+    def test_support_report_rejects_unknown_stages(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            support_report.make_support_report("send", RuntimeError("never"))
+
     def test_labels_are_position_based_not_serialized_names(self) -> None:
         self.assertEqual(
             DryRunWizard._label(2, psd_reader.RawPlayerRow("4", "Voorbeeld Speler", True, False)),

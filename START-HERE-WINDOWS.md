@@ -90,3 +90,11 @@ naar Nederlands of Engels en maak geen eigen gok op een knop.
 
 Noteer alleen het wedstrijdblad-ID en de foutmelding. Deel geen wachtwoord, browsercookie,
 spelernaam, geboortedatum of screenshot met persoonlijke gegevens in een supportvraag.
+
+Wil je een fout helpen melden, vink dan vóór de fout de optionele supportmelding aan. De app
+opent dan uitsluitend een vooraf ingevuld GitHub-formulier; zij verstuurt nooit zelf een issue en
+gebruikt geen GitHub-token. Het formulier bevat alleen de stap en een vaste foutcategorie, nooit
+de fouttekst, wedstrijdblad-ID, naam, datum, URL, cookie of browsergegevens. Lees het formulier
+na en dien het alleen zelf in als er geen persoonsgegevens of beveiligingsprobleem bij betrokken
+zijn. Voor een mogelijk beveiligings- of privacyprobleem volg je `SECURITY.md` en open je geen
+publiek issue.
