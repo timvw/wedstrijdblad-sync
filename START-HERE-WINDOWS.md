@@ -1,8 +1,9 @@
 # Wedstrijdblad Sync — starten op Windows
 
 Gebruik deze handleiding met **Wedstrijdblad Dry-run Wizard**. De app leest PSD en e-Kickoff en
-kan, na twee expliciete bevestigingen, spelers als concept zetten. Bewaren van dat concept is een
-apart, standaard uitgeschakeld vinkje. Officieel versturen bestaat niet in de app.
+kan, na twee expliciete bevestigingen, spelers als onbewaard concept zetten. Bewaren en officieel
+versturen bestaan niet in de app: de afgevaardigde doet die laatste controle en eventuele bewaring
+zelf in e-Kickoff.
 
 ## Voor je begint
 
