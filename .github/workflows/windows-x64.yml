@@ -1,0 +1,65 @@
+name: Build Windows x64
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+
+      - name: Build executables and run console checks
+        shell: pwsh
+        run: |
+          $env:WEDSTRIJDBLAD_PYTHON = "$env:pythonLocation\python.exe"
+          cmd /c build-windows-reader.bat
+
+      - name: Verify packaged GUI self-tests
+        shell: pwsh
+        run: |
+          $guiExecutables = @(
+            'wedstrijdblad-psd-wizard.exe',
+            'wedstrijdblad-dryrun-wizard.exe',
+            'wedstrijdblad-controle.exe'
+          )
+          foreach ($executable in $guiExecutables) {
+            $process = Start-Process -FilePath (Join-Path $PWD "dist\$executable") `
+              -ArgumentList '--self-test' -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              throw "$executable self-test failed with exit code $($process.ExitCode)"
+            }
+          }
+
+      - name: Assemble distributable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Copy-Item dist\*.exe release\
+          Copy-Item START-HERE-WINDOWS.md, WINDOWS-RELEASE-CHECKLIST.md release\
+          Get-FileHash release\*.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash) *$($_.Path | Split-Path -Leaf)" } |
+            Set-Content -Encoding ascii release\SHA256SUMS.txt
+
+      - name: Upload Windows x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wedstrijdblad-sync-windows-x64
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
