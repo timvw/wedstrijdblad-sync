@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.ruff_cache/
+build/
+dist/
+*.spec
+*.log
+*.zip
+*.json
+.env
+
